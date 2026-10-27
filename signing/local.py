@@ -122,6 +122,18 @@ def signed_artifact(home, scope):
             raise SigningError("successful_verified_signing_run_required")
         if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+", report.get("version", "")) or not re.fullmatch(r"[0-9a-f]{64}", report.get("sha256", "")):
             raise SigningError("invalid_signed_app_report")
+        bootstrap = home / "bootstrap-state.gpg"
+        if not bootstrap.is_file() or hashlib.sha256(bootstrap.read_bytes()).hexdigest() != report.get("bootstrapStateSha256"):
+            raise SigningError("current_authorization_not_verified")
+        import datetime as dt
+        try:
+            expires = dt.datetime.fromisoformat(report["expiresAt"])
+            if expires.tzinfo is None:
+                raise ValueError()
+        except (ValueError, KeyError, TypeError):
+            raise SigningError("invalid_signed_app_report") from None
+        if expires <= dt.datetime.now(dt.timezone.utc):
+            raise SigningError("fresh_verified_signing_run_required")
     return package, report
 
 

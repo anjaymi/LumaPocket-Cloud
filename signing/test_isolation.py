@@ -2,6 +2,8 @@
 import argparse
 import copy
 import contextlib
+import datetime as dt
+import hashlib
 import io
 import json
 import os
@@ -229,6 +231,31 @@ class LocalIsolationChecks(unittest.TestCase):
     def test_cached_github_token_is_verified_against_numeric_owner(self):
         with mock.patch.object(repos, "gh", side_effect=[b"fixture-not-a-token", b'{"id":202}']):
             self.assertRaisesRegex(SigningError, "another_owner", repos.client, ALICE)
+
+    def artifact_report(self, other_authorization=False, expired=False):
+        bootstrap = b"fixture-current-authorization"
+        (self.root / "bootstrap-state.gpg").write_bytes(bootstrap)
+        report = {"status": "signed", "signatureChecksPassed": True, "repositoryScope": ALICE.as_dict(),
+                  "runId": 9, "version": "1.0.0+1", "sha256": "f" * 64,
+                  "bootstrapStateSha256": "0" * 64 if other_authorization else hashlib.sha256(bootstrap).hexdigest(),
+                  "expiresAt": (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=-1 if expired else 7)).isoformat()}
+        package = self.root / "fixture-result.zip"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("signing-report.json", json.dumps(report))
+        github = mock.Mock()
+        github.artifact.return_value = ({"id": 9}, {})
+        github.download_artifact.side_effect = lambda unused, target: target.write_bytes(package.read_bytes())
+        return github
+
+    def test_same_repository_previous_authorization_cannot_be_downloaded(self):
+        github = self.artifact_report(other_authorization=True)
+        with mock.patch.object(local, "client", return_value=github):
+            self.assertRaisesRegex(SigningError, "current_authorization", local.signed_artifact, self.root, ALICE)
+
+    def test_expired_signed_artifact_cannot_be_downloaded(self):
+        github = self.artifact_report(expired=True)
+        with mock.patch.object(local, "client", return_value=github):
+            self.assertRaisesRegex(SigningError, "fresh_verified", local.signed_artifact, self.root, ALICE)
 
     def test_cli_writes_use_frozen_owner_token_in_environment(self):
         result = mock.Mock(returncode=0, stdout=b"ok", stderr=b"")
