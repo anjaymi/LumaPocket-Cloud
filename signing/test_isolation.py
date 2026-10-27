@@ -15,7 +15,7 @@ from github_api import GitHub, trusted_run
 from local_key import state_key
 import local
 import local_repositories as repos
-from repository import Scope, account_binding, assert_identity_scope, assert_report_scope, bind_account
+from repository import Scope, UPSTREAM_SCOPE, account_binding, assert_identity_scope, assert_report_scope, bind_account
 import ci_renew
 
 ALICE = Scope("alice/LumaPocket-Cloud", 1001, 101)
@@ -63,6 +63,9 @@ class ScopeChecks(unittest.TestCase):
         env = environment(ALICE)
         del env["SIGNING_OWNER_ID"]
         self.assertRaisesRegex(SigningError, "setup", Scope.from_environment, env)
+
+    def test_shared_build_repository_cannot_run_personal_signing(self):
+        self.assertRaisesRegex(SigningError, "shared_build_repository", Scope.from_environment, environment(UPSTREAM_SCOPE))
 
     def test_recreated_repository_with_same_name_is_different(self):
         self.assertRaisesRegex(SigningError, "another_repository", assert_identity_scope,
@@ -167,15 +170,15 @@ class LocalIsolationChecks(unittest.TestCase):
                 return b"[]"
             return b""
         import base64
-        github = mock.Mock()
-        github.get.return_value = {"content": base64.b64encode(b'{"schema":2,"upstream":"anjaymi/LumaPocket"}').decode()}
+        github = mock.Mock(scope=ALICE)
+        github.get.side_effect = [{"content": base64.b64encode(b'{"schema":2,"upstream":"anjaymi/LumaPocket"}').decode()}, {"variables": []}]
         with mock.patch.object(repos, "viewer", return_value={"id": 101, "login": "alice"}), mock.patch.object(repos, "gh", side_effect=gh), mock.patch.object(repos, "client", return_value=github):
             scope, home = repos.setup(self.root, ALICE.repository)
         self.assertEqual(scope, ALICE)
         self.assertEqual(json.loads((home / "repository.json").read_text()), ALICE.as_dict())
-        writes = [args for args in calls if args[:2] == ["variable", "set"]]
-        self.assertEqual(len(writes), 3)
-        self.assertTrue(all(args[args.index("--repo") + 1] == ALICE.repository for args in writes))
+        self.assertEqual(github.set_variable.call_count, 3)
+        self.assertEqual(github.set_variable.call_args_list[0].args, ("FREE_SIGNING_ENABLED", "false"))
+        self.assertEqual(github.scope, ALICE)
         self.assertFalse(any(args[:2] == ["secret", "set"] for args in calls))
 
     def test_wrong_state_is_rejected_before_portal_or_public_build_access(self):
@@ -214,6 +217,13 @@ class LocalIsolationChecks(unittest.TestCase):
         github.download_artifact.side_effect = lambda unused, target: target.write_bytes(package.read_bytes())
         with mock.patch.object(local, "client", return_value=github), mock.patch.object(local, "repository_gh") as gh:
             self.assertRaisesRegex(SigningError, "another_repository", local.enable, self.root, BOB)
+        gh.assert_not_called()
+
+    def test_repository_command_refuses_other_users_target(self):
+        github = mock.Mock(scope=ALICE, token="fixture")
+        with mock.patch.object(repos, "gh") as gh:
+            self.assertRaisesRegex(SigningError, "target_must_match", repos.repository_gh, github,
+                                   ["secret", "set", "fixture", "--repo", BOB.repository], b"fixture")
         gh.assert_not_called()
 
     def test_cached_github_token_is_verified_against_numeric_owner(self):

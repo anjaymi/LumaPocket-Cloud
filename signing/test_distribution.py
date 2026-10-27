@@ -11,6 +11,8 @@ from unittest import mock
 import zipfile
 from common import SigningError
 from repository import UPSTREAM_OWNER_ID
+from repository import Scope
+from github_api import GitHub
 
 source = Path(__file__).resolve().parents[1] / "ci/publish_unsigned.py"
 spec = importlib.util.spec_from_file_location("unsigned_publisher", source)
@@ -69,6 +71,22 @@ class DistributionChecks(unittest.TestCase):
         github = mock.Mock()
         github.get.side_effect = [{"head_repository": {"id": 1435778522}, "actor": {"id": 123}}, {"id": 7}]
         self.assertRaisesRegex(SigningError, "trusted_upstream_build", publisher.verify_build, github, 42)
+
+    def test_personal_state_cannot_use_public_asset_upload(self):
+        path = self.root / "certificate.p12"
+        path.write_bytes(b"fixture-private-key")
+        self.assertRaisesRegex(SigningError, "only_shared_unsigned", GitHub("fixture").upload_unsigned_asset, 42, path)
+        path = self.root / "unsigned-manifest.json"
+        path.write_bytes(b"{}")
+        personal = GitHub("fixture", Scope("alice/LumaPocket-Cloud", 1001, 101))
+        self.assertRaisesRegex(SigningError, "only_shared_unsigned", personal.upload_unsigned_asset, 42, path)
+
+    def test_creation_response_id_handles_draft_read_lag(self):
+        github = mock.Mock()
+        github.get.side_effect = [None, {"id": 7, "draft": True}]
+        with mock.patch.object(publisher.time, "sleep"):
+            self.assertEqual(publisher.release_by_id(github, 7)["id"], 7)
+        self.assertTrue(all(call.args[0] == "releases/7" for call in github.get.call_args_list))
 
 
 if __name__ == "__main__":

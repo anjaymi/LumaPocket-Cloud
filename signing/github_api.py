@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from common import SigningError
 from repository import Scope, UPSTREAM, UPSTREAM_ID, UPSTREAM_SCOPE
 
@@ -81,6 +81,51 @@ class GitHub:
         if digest != "sha256:" + hashlib.sha256(data).hexdigest() or len(data) != item.get("size"):
             raise SigningError("public_release_asset_digest_mismatch")
         return data
+
+    def write(self, path, payload=None, method="POST"):
+        """Do not blindly retry dispatches or other non-idempotent writes."""
+        data = json.dumps(payload).encode() if payload is not None else b""
+        request = urllib.request.Request("https://api.github.com/repos/" + self.scope.repository + "/" + path,
+            data=data, method=method, headers={"Authorization": "Bearer " + self.token,
+                "User-Agent": "LumaPocket", "Content-Type": "application/json", "Accept": "application/vnd.github+json"})
+        return self.send_write(request)
+
+    def upload_unsigned_asset(self, release_id, path):
+        import re
+        path = Path(path)
+        if self.scope != UPSTREAM_SCOPE or (path.name != "unsigned-manifest.json" and not re.fullmatch(r"LumaPocket_[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+_unsigned\.ipa", path.name)):
+            raise SigningError("only_shared_unsigned_files_can_be_public_release_assets")
+        if type(release_id) is not int or release_id <= 0 or path.stat().st_size > 256 * 1024 * 1024:
+            raise SigningError("invalid_public_release_upload")
+        url = ("https://uploads.github.com/repos/" + self.scope.repository + "/releases/" + str(release_id)
+               + "/assets?" + urlencode({"name": path.name}))
+        request = urllib.request.Request(url, data=path.read_bytes(), method="POST",
+            headers={"Authorization": "Bearer " + self.token, "User-Agent": "LumaPocket", "Content-Type": "application/octet-stream"})
+        return self.send_write(request, timeout=180)
+
+    def send_write(self, request, timeout=90):
+        try:
+            with self.opener.open(request, timeout=timeout) as response:
+                value = response.read()
+                return json.loads(value) if value else None
+        except urllib.error.HTTPError:
+            raise SigningError("github_write_rejected") from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            raise SigningError("github_write_outcome_unknown_retry_setup_or_publish") from None
+
+    def set_variable(self, name, value):
+        import re
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", name):
+            raise SigningError("invalid_repository_variable_name")
+        previous = self.get("actions/variables/" + name, missing_ok=True)
+        path = "actions/variables/" + name if previous else "actions/variables"
+        try:
+            self.write(path, {"name": name, "value": value}, "PATCH" if previous else "POST")
+        except SigningError:
+            # Resolve an uncertain response by reading this exact variable.
+            current = self.get("actions/variables/" + name, missing_ok=True)
+            if current is None or current.get("value") != value:
+                raise
 
     def artifact(self, workflow, name):
         workflow_id = self.get("actions/workflows/" + workflow)["id"]

@@ -60,6 +60,8 @@ class Scope:
             raise SigningError("owner_numeric_context_required")
         if env.get("SIGNING_REPOSITORY_ID") != str(scope.repository_id) or env.get("SIGNING_OWNER_ID") != str(scope.owner_id):
             raise SigningError("run_personal_repository_setup_first")
+        if scope == UPSTREAM_SCOPE:
+            raise SigningError("shared_build_repository_cannot_store_personal_signing_state")
         return scope
 
 

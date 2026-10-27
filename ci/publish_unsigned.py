@@ -8,6 +8,7 @@ from pathlib import Path
 import plistlib
 import re
 import sys
+import time
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "signing"))
@@ -77,6 +78,15 @@ def find_release(github, tag):
     return drafts[0] if drafts else None
 
 
+def release_by_id(github, release_id):
+    for attempt in range(7):
+        release = github.get("releases/" + str(release_id), missing_ok=True)
+        if release is not None:
+            return release
+        time.sleep(min(1 << attempt, 4))
+    raise SigningError("created_unsigned_draft_not_ready_retry_publish")
+
+
 def publish(github, run_id, directory):
     run = verify_build(github, run_id)
     config = json.loads(base64.b64decode(github.get("contents/build.json?ref=" + run["head_sha"])["content"]))
@@ -90,14 +100,14 @@ def publish(github, run_id, directory):
     tag = "ios-unsigned-" + str(run_id)
     release = find_release(github, tag)
     if release is None:
-        notes = directory / "release-notes.md"
-        notes.write_text("Unsigned iOS/iPadOS test build " + config["applicationVersion"] +
-                         ". Each tester signs it using their own Apple account.\n\n" +
-                         "Build verification: https://github.com/" + UPSTREAM + "/actions/runs/" + str(run_id) + "\n")
-        gh(["release", "create", tag, "--repo", UPSTREAM, "--draft", "--target", run["head_sha"],
-            "--title", "LumaPocket iOS " + config["applicationVersion"] + " (unsigned)", "--notes-file", str(notes)])
+        notes = ("Unsigned iOS/iPadOS test build " + config["applicationVersion"] +
+                 ". Each tester signs it using their own Apple account.\n\n" +
+                 "Build verification: https://github.com/" + UPSTREAM + "/actions/runs/" + str(run_id) + "\n")
+        release = github.write("releases", {"tag_name": tag, "target_commitish": run["head_sha"], "draft": True,
+            "prerelease": False, "name": "LumaPocket iOS " + config["applicationVersion"] + " (unsigned)", "body": notes})
+    release_id = release["id"]
     for path in files:
-        release = find_release(github, tag)
+        release = release_by_id(github, release_id)
         matches = [item for item in release["assets"] if item["name"] == path.name]
         expected_digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
         if not matches:
@@ -105,17 +115,21 @@ def publish(github, run_id, directory):
                 raise SigningError("published_unsigned_release_is_immutable")
             print("Uploading public unsigned file: " + path.name, flush=True)
             try:
-                gh(["release", "upload", tag, str(path), "--repo", UPSTREAM])
+                github.upload_unsigned_asset(release_id, path)
             except SigningError:
                 # A transport error may happen after the server accepted the file.
                 pass
-            matches = [item for item in find_release(github, tag)["assets"] if item["name"] == path.name]
+            for attempt in range(7):
+                matches = [item for item in release_by_id(github, release_id)["assets"] if item["name"] == path.name]
+                if matches and matches[0].get("digest") == expected_digest:
+                    break
+                time.sleep(min(1 << attempt, 4))
         if len(matches) != 1 or matches[0].get("digest") != expected_digest or matches[0]["size"] != path.stat().st_size:
             raise SigningError("unsigned_release_upload_incomplete_retry_publish")
-    release = find_release(github, tag)
+    release = release_by_id(github, release_id)
     if len(release["assets"]) != 2:
         raise SigningError("unexpected_files_in_unsigned_release")
-    gh(["release", "edit", tag, "--repo", UPSTREAM, "--draft=false", "--latest"])
+    github.write("releases/" + str(release_id), {"draft": False, "make_latest": "true"}, "PATCH")
     print("Public unsigned build: https://github.com/" + UPSTREAM + "/releases/tag/" + tag, flush=True)
 
 

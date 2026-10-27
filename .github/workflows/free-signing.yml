@@ -53,7 +53,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   renew:
-    if: github.repository_owner == github.actor && github.ref == 'refs/heads/main' && github.repository_id == vars.SIGNING_REPOSITORY_ID && github.repository_owner_id == vars.SIGNING_OWNER_ID && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'renew') || (github.event_name == 'schedule' && vars.FREE_SIGNING_ENABLED == 'true'))
+    if: github.repository_id != '1435778522' && github.repository_owner == github.actor && github.ref == 'refs/heads/main' && github.repository_id == vars.SIGNING_REPOSITORY_ID && github.repository_owner_id == vars.SIGNING_OWNER_ID && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'renew') || (github.event_name == 'schedule' && vars.FREE_SIGNING_ENABLED == 'true'))
     runs-on: macos-15
     timeout-minutes: 20
     permissions:
