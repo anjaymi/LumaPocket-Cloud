@@ -1,0 +1,25 @@
+{
+  "archives": {
+    "Darwin-x86_64": {
+      "url": "https://github.com/SideStore/SideSign/releases/download/v0.1.7/sidesign-macos-x86_64.tar.gz",
+      "sha256": "40cd7eb7fbbfe2b986cd77c1bc778a17c297c337b15b18752abf621afe40acff"
+    },
+    "Darwin-arm64": {
+      "url": "https://github.com/SideStore/SideSign/releases/download/v0.1.7/sidesign-macos-arm64.tar.gz",
+      "sha256": "a9cbafd36294110670f7277b553d435165757034ab9525a18ae6a65b63d830ba"
+    },
+    "Windows-x86_64": {
+      "url": "https://github.com/SideStore/SideSign/releases/download/v0.1.7/sidesign-windows-x64.zip",
+      "sha256": "20e82a37e47df8edec7ee137b46ccc1289dfd8067fe2573c88d2b9220ff50dc6"
+    }
+  },
+  "version": "0.1.7",
+  "sourceRevision": "10b446fc6fc47fe81b60879dfb126d0c8098ec29",
+  "sourceRepository": "https://github.com/SideStore/SideSign",
+  "windowsRuntime": {
+    "file": "windows-runtime.zip",
+    "sha256": "de55adfe0d9a9a4a2219ed8b218116a2d0690810916b7425fbc0b51647aaab6a",
+    "swiftVersion": "6.0.3",
+    "sourceSha256": "ab205d83a38047882db80e6a88c7d33b651f3bac96d4515d7cba5335f37999d3"
+  }
+}
