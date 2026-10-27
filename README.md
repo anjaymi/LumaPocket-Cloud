@@ -4,7 +4,14 @@ A personal iOS build workspace. This repository contains only the build workflow
 its tooling, and an encrypted source snapshot. The primary project and its Git
 history are not published here.
 
-## Build for your own iPhone
+For testers: start with the [personal signing guide / 朋友使用教程](signing/README.md).
+On Windows, `signing\start.cmd` creates/selects your own signing repository and
+starts local Apple authorization.
+
+## Maintainer: build unsigned packages
+
+Only `anjaymi/LumaPocket` runs this build. Personal signing repositories use the
+guide above and download the shared unsigned Release.
 
 1. Open **Actions → iOS self-test → Run workflow**.
 2. Download the successful run's artifact. It contains an unsigned `.ipa`, its
