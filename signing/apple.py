@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from common import SigningError, run_private
 from profile import certificate_der, decode_profile, validate
+from v3_guard import v3_only_server
 
 
 class Apple:
@@ -12,10 +13,11 @@ class Apple:
 
     def portal(self, *arguments):
         i = self.identity
-        command = [self.tool, "dev", *arguments, "--session", str(self.state / "session.dat"),
-                   "--password", i["sessionPassword"], "--machine-password", i["machinePassword"],
-                   "--machine-path", str(self.state / "machine.dat"), "--server", i["anisetteURL"], "--strict"]
-        return run_private(command, self.state, "apple_portal", timeout=150).decode(errors="replace")
+        with v3_only_server(i["anisetteURL"]) as server:
+            command = [self.tool, "dev", *arguments, "--session", str(self.state / "session.dat"),
+                       "--password", i["sessionPassword"], "--machine-password", i["machinePassword"],
+                       "--machine-path", str(self.state / "machine.dat"), "--server", server, "--strict"]
+            return run_private(command, self.state, "apple_portal", timeout=150).decode(errors="replace")
 
     def personal_team(self):
         text = self.portal("teams")
