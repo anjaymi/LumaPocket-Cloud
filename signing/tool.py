@@ -105,7 +105,8 @@ def check(root):
     result = subprocess.run([str(tool), "--help"], capture_output=True, text=True, timeout=30, env=private_env(root))
     if result.returncode or not all(word in result.stdout.lower() for word in ("sign", "profile", "dev")):
         raise RuntimeError("Verified signing tool failed its startup check")
-    return {"version": "0.1.7", "platform": platform.system(), "startupCheck": True}
+    version = json.loads((HERE / "toolchain.json").read_text())["version"]
+    return {"version": version, "platform": platform.system(), "startupCheck": True}
 
 
 if __name__ == "__main__":

@@ -4,6 +4,13 @@
 的 Mac 执行器检查到期时间并生成签名包，无需准备 Mac。工具测试不代表 Apple 已实际
 签发可用的描述文件，也不代表已经完成真机安装；这仍是实验链路。
 
+## 2026-10-29 登录兼容修正
+
+认证服务改为 SideStore 的 macOS ADI 服务 `new.ani.sidestore.io`，设备标识使用 V3
+协议的 Base64 编码，本地用户标识由该设备标识的 SHA-256 派生。签名工具包含 GSA
+请求字段和独立会话修正；固定源码、补丁和构建记录随工具发布。密码框测试不代表
+真实账号授权已通过，仍需完成本人登录、签名和设备安装验证。
+
 ## 朋友首次使用
 
 Windows 需要 Python 3.9+、Git for Windows、GitHub CLI 和 Visual C++ 2015–2022
@@ -133,7 +140,8 @@ signing\start.cmd download --repo YOUR_LOGIN/LumaPocket-Cloud
 隔离、GPG／DPAPI、真实 CSR／PKCS#12 测试。Mac 还使用当前仓库的只读令牌检查公开
 构建源；验证过程不读取 Apple Secrets。虚拟证书不是 Apple 开发证书。
 
-- [固定 SideSign 源码](https://github.com/SideStore/SideSign/tree/10b446fc6fc47fe81b60879dfb126d0c8098ec29)
+- [固定 SideSign 源码](https://github.com/SideStore/SideSign/tree/752d1ef602aa792a432ffa1e71646dc1ecf7363c)
+- [兼容构建与完整补丁源码](https://github.com/anjaymi/LumaPocket/releases/tag/signer-compat-20261029)
 - [Apple 免费账号限制](https://developer.apple.com/help/account/basics/about-your-developer-account)
 - [GitHub 模板仓库](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
 - [GitHub Actions 计费](https://docs.github.com/en/billing/concepts/product-billing/github-actions)

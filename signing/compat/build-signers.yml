@@ -1,0 +1,128 @@
+name: Build V3 protocol corrected signers
+on:
+  push:
+    branches: ['test/sidesign-v3-auth']
+    paths: ['.github/workflows/test-sidesign-windows.yml', '.github/workflows/patch_sidesign.py']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 50
+    steps:
+      - name: Checkout patch controls
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          path: controls
+          persist-credentials: false
+      - name: Checkout reviewed SideSign revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: SideStore/SideSign
+          ref: 752d1ef602aa792a432ffa1e71646dc1ecf7363c
+          path: sidesign-src
+          persist-credentials: false
+      - name: Apply reviewed V3 corrections
+        run: python controls/.github/workflows/patch_sidesign.py sidesign-src
+      - name: Set up Windows compiler
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+          sdk: '10.0.22621.0'
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@d60245579ea3836a3f2fa65ebbe1e8891d577c76
+        with:
+          swift-version: '6.0.3'
+      - name: Configure Swift module maps
+        shell: pwsh
+        run: |
+          $share = "$env:SDKROOT\usr\share"
+          $ucrt = 'C:\Program Files (x86)\Windows Kits\10\include\10.0.22621.0\ucrt'
+          $um = 'C:\Program Files (x86)\Windows Kits\10\include\10.0.22621.0\um'
+          Copy-Item "$share\ucrt.modulemap" "$ucrt\module.modulemap" -Force
+          Copy-Item "$share\winsdk.modulemap" "$um\module.modulemap" -Force
+          Copy-Item "$share\ucrt.apinotes" "$ucrt\ucrt.apinotes" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$share\winsdk.apinotes" "$um\winsdk.apinotes" -Force -ErrorAction SilentlyContinue
+      - name: Install pinned Unicorn and zlib
+        shell: pwsh
+        run: |
+          $archive = "$env:RUNNER_TEMP\unicorn.zip"
+          $url = 'https://github.com/mahee96/unicorn/releases/download/2.1.4-xcf-a53ddc9/unicorn-windows-x64.zip'
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '904b0ba533bf167e6dfca555245c693ce36a015eecdd87ac2dbc5fe121de920c') { throw 'Unicorn checksum mismatch' }
+          Expand-Archive -Path $archive -DestinationPath C:\unicorn
+          vcpkg install zlib:x64-windows-static --x-install-root=C:\vcpkg_installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item C:\vcpkg_installed\x64-windows-static\lib\*.lib C:\unicorn\lib\zlib.lib -Force
+          Copy-Item C:\vcpkg_installed\x64-windows-static\lib\*.lib C:\unicorn\lib\z.lib -Force
+          Copy-Item C:\vcpkg_installed\x64-windows-static\include\zlib.h C:\unicorn\include\zlib.h -Force
+          Copy-Item C:\vcpkg_installed\x64-windows-static\include\zconf.h C:\unicorn\include\zconf.h -Force
+          (Get-Content C:\unicorn\include\zconf.h) -replace '.*unistd\.h.*', '// #include <unistd.h>' | Set-Content C:\unicorn\include\zconf.h
+          echo "INCLUDE=$env:INCLUDE;C:\unicorn\include" >> $env:GITHUB_ENV
+          echo "LIB=$env:LIB;C:\unicorn\lib" >> $env:GITHUB_ENV
+      - name: Build and verify tool startup
+        shell: pwsh
+        working-directory: sidesign-src
+        env:
+          _CL_: '/D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH'
+        run: |
+          if ((git rev-parse HEAD) -ne '752d1ef602aa792a432ffa1e71646dc1ecf7363c') { throw 'Unexpected source revision' }
+          swift build -c release `
+            -Xcc -IC:\unicorn\include -Xcc -DWIN32=1 -Xcc -DZ_HAVE_UNISTD_H=0 `
+            -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH -Xcxx -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH `
+            -Xcc -D_CRT_SECURE_NO_WARNINGS -Xcc -D_CRT_NONSTDC_NO_WARNINGS `
+            -Xswiftc -D_CRT_SECURE_NO_WARNINGS -Xswiftc -D_CRT_NONSTDC_NO_WARNINGS `
+            -Xcxx -IC:\unicorn\include -Xlinker /LIBPATH:C:\unicorn\lib `
+            -Xlinker C:\unicorn\lib\zlib.lib --product sidesign
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = Get-ChildItem -Path .build -Filter sidesign.exe -Recurse | Where-Object { $_.FullName -like '*release*' } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exe) { throw 'Built signer not found' }
+          & $exe --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Signer startup check failed' }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\signer-out" | Out-Null
+          Copy-Item $exe "$env:RUNNER_TEMP\signer-out\sidesign.exe"
+          Compress-Archive -Path "$env:RUNNER_TEMP\signer-out\sidesign.exe" -DestinationPath "$env:RUNNER_TEMP\signer-out\sidesign-windows-x64.zip"
+          Get-FileHash "$env:RUNNER_TEMP\signer-out\sidesign.exe" -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File -Encoding ascii "$env:RUNNER_TEMP\signer-out\sha256.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sidesign-v3-auth-windows
+          path: ${{ runner.temp }}/signer-out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          path: controls
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: SideStore/SideSign
+          ref: 752d1ef602aa792a432ffa1e71646dc1ecf7363c
+          path: sidesign-src
+          persist-credentials: false
+      - name: Apply reviewed V3 corrections
+        run: python3 controls/.github/workflows/patch_sidesign.py sidesign-src
+      - name: Build corrected Mac signer
+        working-directory: sidesign-src
+        run: |
+          swift build -c release --triple ${{ matrix.arch }}-apple-macosx --product sidesign
+          mkdir dist
+          cp .build/${{ matrix.arch }}-apple-macosx/release/sidesign dist/
+          tar -czf sidesign-macos-${{ matrix.arch }}.tar.gz -C dist sidesign
+          shasum -a 256 sidesign-macos-${{ matrix.arch }}.tar.gz > sidesign-macos-${{ matrix.arch }}.tar.gz.sha256
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sidesign-v3-auth-macos-${{ matrix.arch }}
+          path: sidesign-src/sidesign-macos-${{ matrix.arch }}.tar.gz*
+          if-no-files-found: error
+          retention-days: 7

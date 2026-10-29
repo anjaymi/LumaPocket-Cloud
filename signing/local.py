@@ -163,6 +163,7 @@ def download(home, password, scope):
         raise SigningError("signed_ipa_digest_mismatch")
     print("Verified signed IPA: " + str(destination))
     print("Install/refresh on the registered iPhone / iPad. The cloud run does not install it remotely.")
+    return destination
 
 
 def main():
@@ -173,7 +174,7 @@ def main():
     parser.add_argument("--apple-id")
     parser.add_argument("--repo", help="Select a signing repository owned by the current GitHub account")
     parser.add_argument("--repo-name", default="LumaPocket-Cloud", help="Personal repository name for setup")
-    parser.add_argument("--anisette-url", default="https://ani.sidestore.io")
+    parser.add_argument("--anisette-url", default="https://new.ani.sidestore.io")
     args = parser.parse_args()
     home = args.home.resolve()
     if home == HERE.parent or home == HERE:

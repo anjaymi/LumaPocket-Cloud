@@ -1,21 +1,26 @@
 {
   "archives": {
     "Darwin-x86_64": {
-      "url": "https://github.com/SideStore/SideSign/releases/download/v0.1.7/sidesign-macos-x86_64.tar.gz",
-      "sha256": "40cd7eb7fbbfe2b986cd77c1bc778a17c297c337b15b18752abf621afe40acff"
+      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029/sidesign-macos-x86_64.tar.gz",
+      "sha256": "0fe7fd207288f7d1f39abf588b3bfc1a5e8a80cfe19cdc128ed70060052ac5a8"
     },
     "Darwin-arm64": {
-      "url": "https://github.com/SideStore/SideSign/releases/download/v0.1.7/sidesign-macos-arm64.tar.gz",
-      "sha256": "a9cbafd36294110670f7277b553d435165757034ab9525a18ae6a65b63d830ba"
+      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029/sidesign-macos-arm64.tar.gz",
+      "sha256": "59437d2ce66a925acd47d4098b1382824ea20aa4a159dc3721a9ad0661798164"
     },
     "Windows-x86_64": {
-      "url": "https://github.com/SideStore/SideSign/releases/download/v0.1.7/sidesign-windows-x64.zip",
-      "sha256": "20e82a37e47df8edec7ee137b46ccc1289dfd8067fe2573c88d2b9220ff50dc6"
+      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029/sidesign-windows-x64.zip",
+      "sha256": "baaac8ec0447136376160ef429755e47908b7839ce7feb180e517cad96f1bb4d"
     }
   },
-  "version": "0.1.7",
-  "sourceRevision": "10b446fc6fc47fe81b60879dfb126d0c8098ec29",
+  "version": "0.1.7-lumapocket-v3.1",
+  "sourceRevision": "752d1ef602aa792a432ffa1e71646dc1ecf7363c",
   "sourceRepository": "https://github.com/SideStore/SideSign",
+  "compatibilityBuild": {
+    "run": "https://github.com/anjaymi/LumaPocket-Cloud/actions/runs/40859389141",
+    "controlsRevision": "a5efd6b1b0977e41ce04dd23b9bf3598ea765532",
+    "sourceArchiveSha256": "fe53df48946890cf2bfcb7d282756bd87fc8dfdfdc920c85854e5b0610181176"
+  },
   "windowsRuntime": {
     "file": "windows-runtime.zip",
     "sha256": "de55adfe0d9a9a4a2219ed8b218116a2d0690810916b7425fbc0b51647aaab6a",
