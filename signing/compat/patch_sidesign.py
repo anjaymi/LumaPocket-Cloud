@@ -91,3 +91,58 @@ change('Sources/DeveloperPortal/DeveloperPortalAPI.swift', [(
     public init(session: URLSession? = nil, customHeaders: SideSignHeaders = SideSignHeaders()) {
         self.session = session ?? Self.authenticationSession()''', 1,
 )])
+
+# A network or export failure after Apple accepts the CSR must not discard the
+# only private key and leave an un-reusable certificate consuming the free slot.
+change('Sources/Models/CertificateRequest.swift', [(
+    '    public init(machineName: String) throws {',
+    '''    public init(machineName: String, privateKey: Data, csrData: Data) {
+        self.machineName = machineName
+        self.privateKey = privateKey
+        self.csrData = csrData
+    }
+
+    public init(machineName: String) throws {''', 1,
+)])
+
+change('Sources/DeveloperPortal/Certificates.swift', [
+    ('    func addCertificate(machineName: String, type: CertificateType, to team: Team, session: Session) async throws -> KeyStore {',
+     '''    func addCertificate(machineName: String, type: CertificateType, to team: Team, session: Session) async throws -> KeyStore {
+        return try await addCertificate(machineName: machineName, type: type, to: team,
+                                        session: session, recoveryKeyURL: nil)
+    }
+
+    func addCertificate(machineName: String, type: CertificateType, to team: Team,
+                        session: Session, recoveryKeyURL: URL?) async throws -> KeyStore {''', 1),
+    ('            certRequest = try CertificateRequest(machineName: machineName)',
+     '''            if let keyURL = recoveryKeyURL {
+                let csrURL = keyURL.deletingPathExtension().appendingPathExtension("csr")
+                let hasKey = FileManager.default.fileExists(atPath: keyURL.path)
+                let hasCSR = FileManager.default.fileExists(atPath: csrURL.path)
+                guard hasKey == hasCSR else {
+                    throw DeveloperPortalError.invalidCertificateRequest(cause: "Incomplete local certificate recovery files.")
+                }
+                if hasKey {
+                    certRequest = CertificateRequest(machineName: machineName,
+                        privateKey: try Data(contentsOf: keyURL), csrData: try Data(contentsOf: csrURL))
+                } else {
+                    certRequest = try CertificateRequest(machineName: machineName)
+                    try certRequest.privateKey.write(to: keyURL, options: .atomic)
+                    try certRequest.csrData.write(to: csrURL, options: .atomic)
+                    #if !os(Windows)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
+                    #endif
+                }
+            } else {
+                certRequest = try CertificateRequest(machineName: machineName)
+            }''', 1),
+])
+
+change('CLI/CommandHandler.swift', [(
+    '                let keyStore = try await portal.addCertificate(machineName: machineName, type: resolvedType, to: team, session: session)',
+    '''                let recoveryKeyURL = outPath.map {
+                    URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("certificate-request.key")
+                }
+                let keyStore = try await portal.addCertificate(machineName: machineName, type: resolvedType,
+                    to: team, session: session, recoveryKeyURL: recoveryKeyURL)''', 1,
+)])

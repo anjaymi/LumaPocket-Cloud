@@ -5,6 +5,7 @@ from pathlib import Path
 from common import SigningError, run_private
 from profile import certificate_der, decode_profile, validate
 from v3_guard import v3_only_server
+from certificate_recovery import recover
 
 
 class Apple:
@@ -47,7 +48,12 @@ class Apple:
         if not p12.is_file():
             if not create:
                 raise SigningError("signing_certificate_missing")
-            self.portal("certs", "create", "--name", "LumaPocket self-test", "--output", str(p12))
+            if not recover(self):
+                try:
+                    self.portal("certs", "create", "--name", "LumaPocket self-test", "--output", str(p12))
+                except SigningError:
+                    if not recover(self):
+                        raise
         der = certificate_der(p12, self.identity["p12Password"], self.state)
         from common import executable
         run_private([executable("openssl"), "x509", "-inform", "DER", "-checkend", "43200", "-noout"],

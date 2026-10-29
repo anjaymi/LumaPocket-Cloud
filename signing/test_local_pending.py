@@ -127,12 +127,16 @@ class PendingTests(unittest.TestCase):
 
             def bootstrap(self):
                 (self.root / 'certificate.p12').write_bytes(b'synthetic-private-key-only')
+                (self.root / 'certificate-request.key').write_bytes(b'synthetic-recovery-key-only')
+                (self.root / 'certificate-request.csr').write_bytes(b'synthetic-recovery-request-only')
                 raise SigningError('apple_portal_failed')
 
         class FinishedPortal(InterruptedPortal):
             def bootstrap(self):
                 if (self.root / 'certificate.p12').read_bytes() != b'synthetic-private-key-only':
                     raise AssertionError('private key was not recovered')
+                if (self.root / 'certificate-request.key').read_bytes() != b'synthetic-recovery-key-only':
+                    raise AssertionError('recovery key was not preserved')
                 self.identity.update(teamId='TESTTEAM01', bundleIdentifier='io.lumapocket.client.testteam01')
                 (self.root / 'identity.json').write_text(json.dumps(self.identity))
 

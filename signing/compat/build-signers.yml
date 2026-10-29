@@ -1,7 +1,7 @@
-name: Build V3 protocol corrected signers
+name: Build recoverable certificate signers
 on:
   push:
-    branches: ['test/sidesign-v3-auth']
+    branches: ['test/sidesign-certificate-recovery']
     paths: ['.github/workflows/test-sidesign-windows.yml', '.github/workflows/patch_sidesign.py']
 
 permissions:

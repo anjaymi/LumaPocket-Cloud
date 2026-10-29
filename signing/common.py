@@ -37,6 +37,8 @@ def run_private(args, root, stage, data=None, timeout=180, interactive=False):
         log.chmod(0o600)
     if result.returncode:
         text = (result.stdout + result.stderr).decode(errors="replace").lower()
+        if stage == 'apple_portal' and ('maximum number of certificates' in text or 'too many certificates' in text):
+            raise SigningError('apple_certificate_limit_reached')
         if any(word in text for word in ("session expired", "re-authenticate", "incorrect credentials", "two-factor", "verification code")):
             raise SigningError("reauthorization_required")
         raise SigningError(stage + "_failed")

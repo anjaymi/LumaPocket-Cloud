@@ -1,25 +1,25 @@
 {
   "archives": {
     "Darwin-x86_64": {
-      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029/sidesign-macos-x86_64.tar.gz",
-      "sha256": "0fe7fd207288f7d1f39abf588b3bfc1a5e8a80cfe19cdc128ed70060052ac5a8"
+      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029-r2/sidesign-macos-x86_64.tar.gz",
+      "sha256": "d540ca50d4135d821eaae25732a76adf83f501c0846ef6b5808bec62d2516a3e"
     },
     "Darwin-arm64": {
-      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029/sidesign-macos-arm64.tar.gz",
-      "sha256": "59437d2ce66a925acd47d4098b1382824ea20aa4a159dc3721a9ad0661798164"
+      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029-r2/sidesign-macos-arm64.tar.gz",
+      "sha256": "9a8a8f35750fbcdc4617cf97796e39156152d8a2c363d944c8cc194df78da6ba"
     },
     "Windows-x86_64": {
-      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029/sidesign-windows-x64.zip",
-      "sha256": "baaac8ec0447136376160ef429755e47908b7839ce7feb180e517cad96f1bb4d"
+      "url": "https://github.com/anjaymi/LumaPocket/releases/download/signer-compat-20261029-r2/sidesign-windows-x64.zip",
+      "sha256": "b0723ee840d10bf9402142866f9335fc0341278c361f401455b59932a074726e"
     }
   },
-  "version": "0.1.7-lumapocket-v3.1",
+  "version": "0.1.7-lumapocket-v3.2",
   "sourceRevision": "752d1ef602aa792a432ffa1e71646dc1ecf7363c",
   "sourceRepository": "https://github.com/SideStore/SideSign",
   "compatibilityBuild": {
-    "run": "https://github.com/anjaymi/LumaPocket-Cloud/actions/runs/40859389141",
-    "controlsRevision": "a5efd6b1b0977e41ce04dd23b9bf3598ea765532",
-    "sourceArchiveSha256": "fe53df48946890cf2bfcb7d282756bd87fc8dfdfdc920c85854e5b0610181176"
+    "run": "https://github.com/anjaymi/LumaPocket-Cloud/actions/runs/40866853470",
+    "controlsRevision": "96ea2589d225cf826173472805a52fab5d644f75",
+    "sourceArchiveSha256": "fdb21a1a7c337da5a97e3b56cb910c60f2ed22fd574a98c4958cb972ce6fdf34"
   },
   "windowsRuntime": {
     "file": "windows-runtime.zip",

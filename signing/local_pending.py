@@ -9,7 +9,8 @@ from profile import validate_local_inputs
 from repository import assert_identity_scope
 from storage import crypt
 
-FILES = {'identity.json', 'session.dat', 'machine.dat', 'certificate.p12', 'profile.mobileprovision'}
+FILES = {'identity.json', 'session.dat', 'machine.dat', 'certificate.p12', 'profile.mobileprovision',
+         'certificate-request.key', 'certificate-request.csr'}
 REQUIRED = {'identity.json', 'session.dat', 'machine.dat'}
 MAX_AGE = 6 * 60 * 60
 
