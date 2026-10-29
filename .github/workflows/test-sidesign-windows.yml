@@ -1,8 +1,8 @@
-name: Build pinned Windows signer for 2FA test
+name: Build V3 protocol corrected signers
 on:
   push:
-    branches: ['test/sidesign-2fa-windows']
-    paths: ['.github/workflows/test-sidesign-windows.yml']
+    branches: ['test/sidesign-v3-auth']
+    paths: ['.github/workflows/test-sidesign-windows.yml', '.github/workflows/patch_sidesign.py']
 
 permissions:
   contents: read
@@ -12,6 +12,11 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 50
     steps:
+      - name: Checkout patch controls
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          path: controls
+          persist-credentials: false
       - name: Checkout reviewed SideSign revision
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -19,6 +24,8 @@ jobs:
           ref: 752d1ef602aa792a432ffa1e71646dc1ecf7363c
           path: sidesign-src
           persist-credentials: false
+      - name: Apply reviewed V3 corrections
+        run: python controls/.github/workflows/patch_sidesign.py sidesign-src
       - name: Set up Windows compiler
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
@@ -76,10 +83,46 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Signer startup check failed' }
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\signer-out" | Out-Null
           Copy-Item $exe "$env:RUNNER_TEMP\signer-out\sidesign.exe"
+          Compress-Archive -Path "$env:RUNNER_TEMP\signer-out\sidesign.exe" -DestinationPath "$env:RUNNER_TEMP\signer-out\sidesign-windows-x64.zip"
           Get-FileHash "$env:RUNNER_TEMP\signer-out\sidesign.exe" -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File -Encoding ascii "$env:RUNNER_TEMP\signer-out\sha256.txt"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: sidesign-2fa-test-windows
+          name: sidesign-v3-auth-windows
           path: ${{ runner.temp }}/signer-out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          path: controls
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: SideStore/SideSign
+          ref: 752d1ef602aa792a432ffa1e71646dc1ecf7363c
+          path: sidesign-src
+          persist-credentials: false
+      - name: Apply reviewed V3 corrections
+        run: python3 controls/.github/workflows/patch_sidesign.py sidesign-src
+      - name: Build corrected Mac signer
+        working-directory: sidesign-src
+        run: |
+          swift build -c release --triple ${{ matrix.arch }}-apple-macosx --product sidesign
+          mkdir dist
+          cp .build/${{ matrix.arch }}-apple-macosx/release/sidesign dist/
+          tar -czf sidesign-macos-${{ matrix.arch }}.tar.gz -C dist sidesign
+          shasum -a 256 sidesign-macos-${{ matrix.arch }}.tar.gz > sidesign-macos-${{ matrix.arch }}.tar.gz.sha256
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sidesign-v3-auth-macos-${{ matrix.arch }}
+          path: sidesign-src/sidesign-macos-${{ matrix.arch }}.tar.gz*
           if-no-files-found: error
           retention-days: 7
