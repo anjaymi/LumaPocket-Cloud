@@ -13,6 +13,20 @@ from pathlib import Path, PurePosixPath
 HERE = Path(__file__).resolve().parent
 
 
+def write_verified_member(target, payload):
+    """Avoid rewriting already verified native binaries on every authorization."""
+    if target.is_symlink():
+        raise ValueError("Symbolic tool output is not allowed")
+    if target.is_file() and target.stat().st_size == len(payload):
+        digest = hashlib.sha256()
+        with target.open("rb") as current:
+            while chunk := current.read(1024 * 1024):
+                digest.update(chunk)
+        if digest.digest() == hashlib.sha256(payload).digest():
+            return
+    target.write_bytes(payload)
+
+
 def safe_name(name):
     normalized = name.removeprefix("./")
     path = PurePosixPath(normalized)
@@ -61,7 +75,7 @@ def install(root):
                     if member.file_size > 128 * 1024 * 1024:
                         raise ValueError("Oversized tool entry")
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(package.read(member))
+                    write_verified_member(target, package.read(member))
     else:
         with tarfile.open(archive) as package:
             seen = set()
@@ -75,7 +89,7 @@ def install(root):
                     target.mkdir(parents=True, exist_ok=True)
                 else:
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(package.extractfile(member).read())
+                    write_verified_member(target, package.extractfile(member).read())
                     target.chmod(member.mode & 0o777)
     name = "sidesign.exe" if os.name == "nt" else "sidesign"
     candidates = list(binaries.rglob(name))
@@ -95,7 +109,7 @@ def install(root):
                 if "/" in entry or entry in seen or member.file_size > 128 * 1024 * 1024 or stat.S_ISLNK(member.external_attr >> 16):
                     raise ValueError("Unsafe runtime entry")
                 seen.add(entry)
-                (candidates[0].parent / entry).write_bytes(package.read(member))
+                write_verified_member(candidates[0].parent / entry, package.read(member))
     return candidates[0].resolve()
 
 
