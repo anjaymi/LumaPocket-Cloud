@@ -14,7 +14,7 @@ class Apple:
 
     def portal(self, *arguments):
         i = self.identity
-        with v3_only_server(i["anisetteURL"]) as server:
+        with v3_only_server(i["anisetteURL"], on_failure=lambda reason: print('Anisette transport: ' + reason, flush=True)) as server:
             command = [self.tool, "dev", *arguments, "--session", str(self.state / "session.dat"),
                        "--password", i["sessionPassword"], "--machine-password", i["machinePassword"],
                        "--machine-path", str(self.state / "machine.dat"), "--server", server, "--strict"]

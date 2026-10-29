@@ -9,6 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import secrets
 import threading
+import time
+import ssl
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -24,7 +26,7 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 @contextmanager
-def v3_only_server(upstream):
+def v3_only_server(upstream, on_failure=None):
     parsed = urlsplit(upstream)
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or
             parsed.password or parsed.query or parsed.fragment):
@@ -46,19 +48,35 @@ def v3_only_server(upstream):
             self.wfile.write(body)
 
         def forward(self, path, body=None):
-            try:
-                headers = {'Content-Type': 'application/json'} if body is not None else {}
-                request = Request(upstream + path, data=body, headers=headers)
-                with opener.open(request, timeout=12) as response:
-                    result = response.read(_MAX_BODY + 1)
-                    if len(result) > _MAX_BODY:
-                        raise ValueError('response_too_large')
-                    value = json.loads(result)
-                    if not isinstance(value, dict):
-                        raise ValueError('response_not_object')
-                self.respond(200, result)
-            except (HTTPError, URLError, OSError, ValueError, TimeoutError):
-                self.respond(502, b'{}')
+            # These V3 endpoints only fetch device headers/client metadata.
+            # Retry transient transport errors without repeating any Apple
+            # login, certificate issuance, or revocation operation.
+            for attempt in range(3):
+                retry = True
+                try:
+                    headers = {'Content-Type': 'application/json'} if body is not None else {}
+                    request = Request(upstream + path, data=body, headers=headers)
+                    with opener.open(request, timeout=12) as response:
+                        result = response.read(_MAX_BODY + 1)
+                        if len(result) > _MAX_BODY or not isinstance(json.loads(result), dict):
+                            raise ValueError('invalid_response')
+                    self.respond(200, result)
+                    return
+                except HTTPError as error:
+                    reason = 'upstream_http_' + str(error.code)
+                    retry = error.code in (429, 500, 502, 503, 504)
+                except (URLError, OSError, TimeoutError) as error:
+                    tls = isinstance(error, ssl.SSLCertVerificationError) or isinstance(getattr(error, 'reason', None), ssl.SSLCertVerificationError)
+                    reason = 'tls_verification_failed' if tls else 'network_unavailable'
+                    retry = not tls
+                except ValueError:
+                    reason, retry = 'invalid_response', False
+                if on_failure:
+                    on_failure(reason)
+                if not retry or attempt == 2:
+                    break
+                time.sleep(0.5 * (attempt + 1))
+            self.respond(502, b'{}')
 
         def do_GET(self):
             if self.path == prefix + '/v3/client_info':
