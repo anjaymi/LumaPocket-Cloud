@@ -20,6 +20,7 @@ from profile import identity_from, validate_local_inputs
 from repository import assert_identity_scope, assert_report_scope, bind_account
 from storage import crypt, export_state, extract_state
 from tool import check, install
+from local_pending import active_session, restore_pending, save_pending
 
 HERE = Path(__file__).resolve().parent
 
@@ -31,7 +32,14 @@ def authorize(home, args, password, scope):
         if not root.is_relative_to(home.resolve()):
             raise SigningError("unexpected_local_work_directory")
         previous = home / "bootstrap-state.gpg"
-        if previous.exists():
+        identity = restore_pending(root, home, password, scope)
+        resuming = identity is not None
+        if resuming:
+            print("Signing phase: resume_session", flush=True)
+            supplied_udid = args.udid or input('iPhone / iPad UDID (from Apple Devices/iTunes): ').strip()
+            if supplied_udid.lower() != identity['deviceUdid'].lower():
+                raise SigningError('checkpoint_device_mismatch')
+        elif previous.exists():
             raw = root / "previous.tar.gz"
             crypt(previous, raw, password, root, decrypt=True)
             extract_state(raw, root)
@@ -47,20 +55,40 @@ def authorize(home, args, password, scope):
         apple_id = args.apple_id or input("Apple Account email: ").strip()
         bind_account(identity, scope, apple_id)
         tool = install(home / "tool")
-        print("Enter your Apple password and verification code in the signing tool's local prompts.")
-        run_private([str(tool), "dev", "login", "--apple-id", apple_id,
+        if not resuming or identity.pop('needsReauthentication', False):
+            # Never let the CLI silently reuse an old explicit session when a
+            # fresh password/code exchange has been requested.
+            (root / 'session.dat').unlink(missing_ok=True)
+            print("Enter your Apple password and verification code in the signing tool's local prompts.")
+            run_private([str(tool), "dev", "login", "--apple-id", apple_id,
                      "--encrypt-password", identity["sessionPassword"],
+                     "--session", str(root / "session.dat"),
                      "--machine-password", identity["machinePassword"],
                      "--machine-path", str(root / "machine.dat"),
                      "--server", identity["anisetteURL"], "--strict"], root, "local_apple_authorization",
                     timeout=900, interactive=True)
-        active = root / "config/.sidesign/session/session.dat"
-        if not active.is_file() or active.read_bytes()[:4] != b"SS02":
-            raise SigningError("portable_authorization_session_missing")
-        shutil.copy2(active, root / "session.dat")
-        Apple(tool, root, identity).bootstrap()
+        print("Signing phase: save_session", flush=True)
+        active = active_session(root)
+        if active != root / 'session.dat':
+            shutil.copy2(active, root / "session.dat")
+        save_pending(root, home, password, identity)
+        try:
+            Apple(tool, root, identity).bootstrap()
+        except Exception as error:
+            # A portal/network failure must not throw away a successful login or
+            # a newly created private key and force another verification code.
+            try:
+                if isinstance(error, SigningError) and str(error) == 'reauthorization_required':
+                    identity['needsReauthentication'] = True
+                save_pending(root, home, password, identity)
+            except (SigningError, OSError):
+                pass
+            raise
         identity_from(root / "identity.json")
+        print("Signing phase: encrypt_state", flush=True)
+        save_pending(root, home, password, identity)
         export_state(root, home / "bootstrap-state.gpg", password, root)
+        (home / 'pending-authorization.gpg').unlink(missing_ok=True)
     print("Authorized state saved locally with encryption. Apple password was not stored.")
     publish(home, password, scope)
 

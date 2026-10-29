@@ -20,6 +20,7 @@ class Apple:
             return run_private(command, self.state, "apple_portal", timeout=150).decode(errors="replace")
 
     def personal_team(self):
+        print('Signing phase: personal_team', flush=True)
         text = self.portal("teams")
         teams = re.findall(r"\(ID: ([A-Z0-9]{10}), Type: (\d)\)", text)
         # Upstream operations use the first returned team. Refuse ambiguous accounts.
@@ -33,12 +34,15 @@ class Apple:
 
     def ensure_registration(self):
         i = self.identity
+        print('Signing phase: register_device', flush=True)
         if i["deviceUdid"] not in self.portal("devices", "list"):
             self.portal("devices", "register", "--name", "LumaPocket personal iPhone or iPad", "--udid", i["deviceUdid"])
         if i["bundleIdentifier"] not in self.portal("appids", "list"):
+            print('Signing phase: register_app', flush=True)
             self.portal("appids", "register", "--name", "LumaPocket", "--bundle-id", i["bundleIdentifier"])
 
     def certificate(self, create=False):
+        print('Signing phase: certificate', flush=True)
         p12 = self.state / "certificate.p12"
         if not p12.is_file():
             if not create:
@@ -57,6 +61,7 @@ class Apple:
         return der
 
     def refresh_profile(self, certificate):
+        print('Signing phase: provisioning_profile', flush=True)
         profile = self.state / "profile.mobileprovision"
         self.portal("profiles", "download", "--bundle-id", self.identity["bundleIdentifier"],
                     "--xcode", "--output", str(profile))
