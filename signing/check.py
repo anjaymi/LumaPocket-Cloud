@@ -18,6 +18,8 @@ def main():
         raise RuntimeError("Signing regression tests failed")
     report = check(root / "tool")
     tool = install(root / "tool")
+    from guard_probe import check_guard
+    check_guard(tool, root)
     csr, key = root / "fixture.csr", root / "fixture.key"
     run_private([str(tool), "csr", "--name", "LumaPocket offline fixture", "--output-csr", str(csr),
                  "--output-key", str(key)], root, "fixture_csr")
@@ -42,7 +44,8 @@ def main():
     if normalized != certificate.read_bytes() or not extracted_key.stat().st_size:
         raise RuntimeError("PKCS12 round-trip failed")
     report.update(schema=1, testsPassed=result.testsRun - len(result.skipped), testsSkipped=len(result.skipped),
-                  csrSignatureVerified=True, pkcs12RoundTrip=True, realAppleAccountUsed=False, realDeviceUsed=False)
+                  csrSignatureVerified=True, pkcs12RoundTrip=True, v3GuardCompatible=True,
+                  realAppleAccountUsed=False, realDeviceUsed=False)
     out = root.parent / "lumapocket-signing-check-out"
     out.mkdir(exist_ok=True)
     (out / ("tool-check-" + platform.system() + ".json")).write_text(json.dumps(report, indent=2))
