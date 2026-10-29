@@ -47,9 +47,14 @@ def decode_profile(path, root):
 
 
 def certificate_der(p12, password, root):
-    pem = run_private([executable("openssl"), "pkcs12", "-in", str(p12), "-passin", "stdin", "-clcerts", "-nokeys"],
+    # CodeSignKit's P12 does not set OpenSSL's localKeyID bag attribute.
+    # -clcerts silently removes its sole certificate while returning success.
+    pem = run_private([executable("openssl"), "pkcs12", "-in", str(p12), "-passin", "stdin", "-nokeys"],
                       root, "identity_certificate", data=(password + "\n").encode())
-    return run_private([executable("openssl"), "x509", "-outform", "DER"], root, "certificate_decode", data=pem)
+    certificates = re.findall(rb'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', pem, re.S)
+    if len(certificates) != 1:
+        raise SigningError('single_identity_certificate_required')
+    return run_private([executable("openssl"), "x509", "-outform", "DER"], root, "certificate_decode", data=certificates[0])
 
 
 def certificate_expiry(certificate, root):

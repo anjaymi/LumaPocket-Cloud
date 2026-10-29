@@ -54,7 +54,12 @@ class Apple:
                 except SigningError:
                     if not recover(self):
                         raise
-        der = certificate_der(p12, self.identity["p12Password"], self.state)
+        try:
+            der = certificate_der(p12, self.identity["p12Password"], self.state)
+        except SigningError:
+            if not create or not recover(self):
+                raise
+            der = certificate_der(p12, self.identity["p12Password"], self.state)
         from common import executable
         run_private([executable("openssl"), "x509", "-inform", "DER", "-checkend", "43200", "-noout"],
                     self.state, "certificate_requires_replacement", data=der)

@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from common import executable, run_private
 from tool import check, install
+from profile import certificate_der
 
 
 def main():
@@ -36,6 +37,8 @@ def main():
     fixture_password = "offline-fixture-only-not-a-real-apple-password"
     run_private([str(tool), "p12", "create", "--cert", str(certificate), "--key", str(key),
                  "--password", fixture_password, "--output", str(p12)], root, "fixture_p12_create")
+    if certificate_der(p12, fixture_password, root) != certificate.read_bytes():
+        raise RuntimeError('Native P12 must be readable by the profile verifier')
     extracted_cert, extracted_key = root / "extracted.der", root / "extracted.key"
     run_private([str(tool), "p12", "extract", "--input", str(p12), "--password", fixture_password,
                  "--output-cert", str(extracted_cert), "--output-key", str(extracted_key)], root, "fixture_p12_extract")
@@ -44,7 +47,7 @@ def main():
     if normalized != certificate.read_bytes() or not extracted_key.stat().st_size:
         raise RuntimeError("PKCS12 round-trip failed")
     report.update(schema=1, testsPassed=result.testsRun - len(result.skipped), testsSkipped=len(result.skipped),
-                  csrSignatureVerified=True, pkcs12RoundTrip=True, v3GuardCompatible=True,
+                  csrSignatureVerified=True, pkcs12RoundTrip=True, opensslP12Interop=True, v3GuardCompatible=True,
                   realAppleAccountUsed=False, realDeviceUsed=False)
     out = root.parent / "lumapocket-signing-check-out"
     out.mkdir(exist_ok=True)
